@@ -35,19 +35,21 @@ def execute_cadquery(code_str: str):
     """
     Executes the CadQuery code and returns the GLB bytes and the result object.
     """
-    local_scope = {}
+    # Use a copy of SAFE_GLOBALS as the single execution scope.
+    # This ensures that functions defined in the executed code can see variables defined in the execution scope.
+    execution_scope = SAFE_GLOBALS.copy()
     
     print(f"--- [DEBUG] Evaluating CadQuery Code ---\n{code_str}\n--------------------------------------")
 
     try:
-        exec(code_str, SAFE_GLOBALS, local_scope)
+        exec(code_str, execution_scope)
     except Exception as e:
         raise ValueError(f"Execution Error: {str(e)}")
     
-    if "result" not in local_scope:
+    if "result" not in execution_scope:
         raise ValueError("The code did not produce a 'result' variable.")
     
-    result = local_scope["result"]
+    result = execution_scope["result"]
     
     # Export to GLTF (GLB)
     with tempfile.NamedTemporaryFile(suffix=".glb", delete=False) as tmp:
