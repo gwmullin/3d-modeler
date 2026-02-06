@@ -11,6 +11,7 @@ Rules:
 4. Do not use `show_object` or `debug` functions.
 5. If the user asks for a modification, the history will be provided. Generate the complete updated code, not just the diff.
 6. Keep the design parametric if possible, using variables at the top.
+7. Most objects will be used on a 3d printer. Avoid sharp overhangs where possible, and optimize for printing without supports where possible.
 """
 
 class GeminiService:

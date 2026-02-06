@@ -5,3 +5,4 @@ cadquery
 sqlalchemy
 pydantic
 python-multipart
+dotenv

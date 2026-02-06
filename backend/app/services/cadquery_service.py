@@ -52,6 +52,7 @@ def execute_cadquery(code_str: str):
     try:
         exec(code_str, execution_scope)
     except Exception as e:
+        print(f"--- [DEBUG] Error: {e} ---")
         # Extract line number from traceback
         cl, exc, tb = sys.exc_info()
         line_number = None
