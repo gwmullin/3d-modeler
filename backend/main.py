@@ -1,6 +1,8 @@
 import os
 import argparse
 import sys
+from dotenv import load_dotenv
+load_dotenv()
 
 # 1. Parse Args and Set Env Vars BEFORE importing app components
 # We check sys.argv directly or use a partial parser to set envs before imports.
