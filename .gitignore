@@ -4,3 +4,7 @@
 */__pycache__/*
 *pycache*
 *cpython*
+*.glb
+*.stl
+backend/cadquery_genai.db
+backend/cadquery_genai.db-journal
