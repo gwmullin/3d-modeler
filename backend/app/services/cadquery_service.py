@@ -31,6 +31,14 @@ SAFE_GLOBALS = {
 import math
 SAFE_GLOBALS["math"] = math
 
+import sys
+import traceback
+
+class CadQueryExecutionError(Exception):
+    def __init__(self, message, line_number=None):
+        super().__init__(message)
+        self.line_number = line_number
+
 def execute_cadquery(code_str: str):
     """
     Executes the CadQuery code and returns the GLB bytes and the result object.
@@ -44,7 +52,16 @@ def execute_cadquery(code_str: str):
     try:
         exec(code_str, execution_scope)
     except Exception as e:
-        raise ValueError(f"Execution Error: {str(e)}")
+        # Extract line number from traceback
+        cl, exc, tb = sys.exc_info()
+        line_number = None
+        # Walk traceback to find the frame corresponding to <string> (our code)
+        for frame in traceback.extract_tb(tb):
+            if frame.filename == "<string>":
+                line_number = frame.lineno
+        
+        error_msg = f"Execution Error on line {line_number}: {str(e)}" if line_number else f"Execution Error: {str(e)}"
+        raise CadQueryExecutionError(error_msg, line_number)
     
     if "result" not in execution_scope:
         raise ValueError("The code did not produce a 'result' variable.")

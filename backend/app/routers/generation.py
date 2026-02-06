@@ -9,7 +9,8 @@ from ..database import get_db
 from ..models import ChatSession, ChatMessage, GeneratedModel
 from ..schemas import GenerateRequest, GenerateResponse
 from ..services.gemini_service import gemini_service
-from ..services.cadquery_service import execute_cadquery, export_stl
+from ..services.gemini_service import gemini_service
+from ..services.cadquery_service import execute_cadquery, export_stl, CadQueryExecutionError
 
 router = APIRouter(
     prefix="/api",
@@ -52,31 +53,56 @@ async def generate_model(request: GenerateRequest, db: Session = Depends(get_db)
              # Gemini history usually expects text parts
              pass 
 
-    # 3. Generate Code
-    try:
-        # Add user message to history effectively
-        full_history = history # logic needs to be careful about not duplicating
-        
-        # We invoke the service
-        code = await gemini_service.generate_code(request.prompt, history=full_history, image_data=request.image)
-        
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gemini Error: {str(e)}")
+    # 3. Generate & Execute Code with Retry
+    MAX_RETRIES = 1
+    
+    # We maintain a working history specific to this generation attempt
+    # so we can append error contexts without corrupting the main DB yet 
+    # (though ultimately we probably want to save the partial failures? For now let's just make it work).
+    working_history = list(history)
+    
+    for attempt in range(MAX_RETRIES + 2): # Initial + retries
+        try:
+            # We invoke the service
+            # If it's a retry, the working_history has the previous bad code and error appended.
+            code = await gemini_service.generate_code(request.prompt, history=working_history, image_data=request.image)
+            
+            # 4. Execute Code
+            try:
+                glb_bytes, result_obj = execute_cadquery(code)
+                # If successful, break
+                break
+            except CadQueryExecutionError as e:
+                print(f"--- [WARN] Attempt {attempt+1} failed: {e}")
+                
+                if attempt < MAX_RETRIES:
+                    # Append context for retry
+                    # 1. The bad code that was generated (as 'model' response)
+                    working_history.append({"role": "model", "content": code})
+                    
+                    # 2. The error message (as 'user' feedback)
+                    retry_prompt = f"The code you generated caused an error:\n{str(e)}\nPlease fix the code and regenerate it completely. Ensure variables are defined before use."
+                    working_history.append({"role": "user", "content": retry_prompt})
+                    
+                    print(f"--- [INFO] Retrying generation (Attempt {attempt+2}/{MAX_RETRIES+2}) ---")
+                    continue
+                else:
+                    # Retries exhausted, re-raise to fail
+                    raise e
 
-    # 4. Execute Code
-    try:
-        glb_bytes, result_obj = execute_cadquery(code)
-    except Exception as e:
-        # Save failure to history so user sees it?
-        # For now, return error
-        print(f"--- [ERROR] Execution Failed ---\n{str(e)}")
-        traceback.print_exc()
-        return GenerateResponse(
-            session_id=session.id, 
-            code=code, 
-            glb_url="", 
-            error=f"Execution Error: {str(e)}"
-        )
+        except Exception as e:
+            if isinstance(e, CadQueryExecutionError):
+                 print(f"--- [ERROR] Final Execution Failed ---\n{str(e)}")
+                 traceback.print_exc()
+                 return GenerateResponse(
+                    session_id=session.id, 
+                    code=code, # Return the failing code
+                    glb_url="", 
+                    error=str(e)
+                 )
+            else:
+                # Gemini error or other
+                raise HTTPException(status_code=500, detail=f"System Error: {str(e)}")
 
     # 5. Save Artifacts
     filename = f"{secrets.token_hex(8)}.glb"
