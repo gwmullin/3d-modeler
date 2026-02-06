@@ -37,6 +37,8 @@ def execute_cadquery(code_str: str):
     """
     local_scope = {}
     
+    print(f"--- [DEBUG] Evaluating CadQuery Code ---\n{code_str}\n--------------------------------------")
+
     try:
         exec(code_str, SAFE_GLOBALS, local_scope)
     except Exception as e:
