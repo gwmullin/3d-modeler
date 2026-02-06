@@ -6,5 +6,4 @@
 *cpython*
 *.glb
 *.stl
-backend/cadquery_genai.db
-backend/cadquery_genai.db-journal
+*cadquery_genai.db*
