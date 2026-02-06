@@ -42,7 +42,7 @@ class GeminiService:
             for entry in history:
                 # Map roles: 'user' -> 'user', 'model' -> 'model'
                 role = "user" if entry['role'] == 'user' else "model"
-                chat_history.append(genai.types.Content(role=role, parts=[genai.types.Part.from_text(entry['content'])]))
+                chat_history.append(genai.types.Content(role=role, parts=[genai.types.Part(text=entry['content'])]))
         
         if chat_history:
             print(f"--- [DEBUG] History: {len(chat_history)} messages ---")
