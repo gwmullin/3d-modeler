@@ -54,14 +54,14 @@ async def generate_model(request: GenerateRequest, db: Session = Depends(get_db)
              pass 
 
     # 3. Generate & Execute Code with Retry
-    MAX_RETRIES = 1
+    MAX_RETRIES = 3
     
     # We maintain a working history specific to this generation attempt
     # so we can append error contexts without corrupting the main DB yet 
     # (though ultimately we probably want to save the partial failures? For now let's just make it work).
     working_history = list(history)
     
-    for attempt in range(MAX_RETRIES + 2): # Initial + retries
+    for attempt in range(1+MAX_RETRIES): # Initial + retries
         try:
             # We invoke the service
             # If it's a retry, the working_history has the previous bad code and error appended.
@@ -84,7 +84,7 @@ async def generate_model(request: GenerateRequest, db: Session = Depends(get_db)
                     retry_prompt = f"The code you generated caused an error:\n{str(e)}\nPlease fix the code and regenerate it completely. Ensure variables are defined before use."
                     working_history.append({"role": "user", "content": retry_prompt})
                     
-                    print(f"--- [INFO] Retrying generation (Attempt {attempt+2}/{MAX_RETRIES+2}) ---")
+                    print(f"--- [INFO] Retrying generation (Attempt {attempt+1}/{MAX_RETRIES}) ---")
                     continue
                 else:
                     # Retries exhausted, re-raise to fail
