@@ -1,5 +1,6 @@
 import os
 import secrets
+import traceback
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from fastapi.responses import FileResponse
@@ -57,7 +58,7 @@ async def generate_model(request: GenerateRequest, db: Session = Depends(get_db)
         full_history = history # logic needs to be careful about not duplicating
         
         # We invoke the service
-        code = await gemini_service.generate_code(request.prompt, history=full_history)
+        code = await gemini_service.generate_code(request.prompt, history=full_history, image_data=request.image)
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gemini Error: {str(e)}")
@@ -68,6 +69,8 @@ async def generate_model(request: GenerateRequest, db: Session = Depends(get_db)
     except Exception as e:
         # Save failure to history so user sees it?
         # For now, return error
+        print(f"--- [ERROR] Execution Failed ---\n{str(e)}")
+        traceback.print_exc()
         return GenerateResponse(
             session_id=session.id, 
             code=code, 

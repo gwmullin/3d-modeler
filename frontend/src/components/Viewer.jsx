@@ -1,5 +1,5 @@
-import React, { Suspense } from 'react';
-import { Canvas } from '@react-three/fiber';
+import React, { Suspense, forwardRef, useImperativeHandle, useRef } from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls, Stage, useGLTF } from '@react-three/drei';
 
 function Model({ url }) {
@@ -7,7 +7,20 @@ function Model({ url }) {
     return <primitive object={scene} />;
 }
 
-export default function Viewer({ modelUrl }) {
+// Internal component to access three context
+function CaptureHandler({ captureRef }) {
+    const { gl, scene, camera } = useThree();
+
+    useImperativeHandle(captureRef, () => ({
+        captureSnapshot: () => {
+            gl.render(scene, camera);
+            return gl.domElement.toDataURL('image/jpeg', 0.8);
+        }
+    }));
+    return null;
+}
+
+const Viewer = forwardRef(({ modelUrl }, ref) => {
     return (
         <div className="w-full h-full bg-gray-900 rounded-lg overflow-hidden relative">
             {!modelUrl && (
@@ -15,7 +28,12 @@ export default function Viewer({ modelUrl }) {
                     <p>No model generated yet.</p>
                 </div>
             )}
-            <Canvas shadows camera={{ position: [0, 0, 150], fov: 50 }}>
+            <Canvas
+                shadows
+                gl={{ preserveDrawingBuffer: true }}
+                camera={{ position: [0, 0, 150], fov: 50 }}
+            >
+                <CaptureHandler captureRef={ref} />
                 <Suspense fallback={null}>
                     <Stage environment="city" intensity={0.6}>
                         {modelUrl && <Model url={modelUrl} key={modelUrl} />}
@@ -25,4 +43,6 @@ export default function Viewer({ modelUrl }) {
             </Canvas>
         </div>
     );
-}
+});
+
+export default Viewer;

@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar';
 import PromptInput from './components/PromptInput';
 import LandingPage from './components/LandingPage';
 import Viewer from './components/Viewer';
+import Toast from './components/Toast';
 import api from './api';
 
 function App() {
@@ -13,6 +14,9 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [toast, setToast] = useState(null); // { message, type }
+
+  const viewerRef = React.useRef(null);
 
   // No Auth State needed
   // const [username, setUsername] = useState('');
@@ -32,26 +36,43 @@ function App() {
     setMessages(prev => [...prev, newMsg]);
 
     try {
+      let imageData = null;
+      // If refinement (session exists and we have a model), capture snapshot
+      if (session?.id && modelUrl && viewerRef.current) {
+        console.log("Capturing snapshot for refinement...");
+        imageData = viewerRef.current.captureSnapshot();
+      }
+
       const res = await api.post('/generate', {
         prompt: text,
-        session_id: session?.id
+        session_id: session?.id,
+        image: imageData
       });
 
       const data = res.data;
       setSession({ id: data.session_id });
 
-      const modelMsg = {
-        role: 'model',
-        content: 'Model Generated',
-        code: data.code
-      };
-      setMessages(prev => [...prev, modelMsg]);
-      setModelUrl(data.glb_url);
+      if (data.error) {
+        // Handle execution error (200 OK but logic failed)
+        const errorMsg = { role: 'model', content: `Error: ${data.error}` };
+        setMessages(prev => [...prev, errorMsg]);
+        setToast({ message: data.error, type: 'error' });
+      } else {
+        const modelMsg = {
+          role: 'model',
+          content: 'Model Generated',
+          code: data.code
+        };
+        setMessages(prev => [...prev, modelMsg]);
+        setModelUrl(data.glb_url);
+      }
 
     } catch (err) {
       console.error(err);
-      const errorMsg = { role: 'model', content: `Error: ${err.response?.data?.detail || err.message}` };
+      const msg = err.response?.data?.detail || err.message;
+      const errorMsg = { role: 'model', content: `Error: ${msg}` };
       setMessages(prev => [...prev, errorMsg]);
+      setToast({ message: msg, type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -104,7 +125,7 @@ function App() {
                Maybe we overlay the conversation or keep it clean?
                Let's show the Viewer always. If empty, it's just a grid.
            */}
-          <Viewer modelUrl={modelUrl} />
+          <Viewer modelUrl={modelUrl} ref={viewerRef} />
 
           {/* Overlay Toast for latest message if from model? */}
           {loading && (
@@ -122,6 +143,7 @@ function App() {
           <PromptInput onSend={sendMessage} loading={loading} />
         </div>
       </div>
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }

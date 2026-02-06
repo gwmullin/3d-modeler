@@ -1,4 +1,5 @@
 from google import genai
+import re
 from ..config import settings
 
 SYSTEM_PROMPT = """
@@ -29,7 +30,7 @@ class GeminiService:
             self.client = genai.Client(api_key=key)
         return self.client
 
-    async def generate_code(self, prompt: str, history: list = None) -> str:
+    async def generate_code(self, prompt: str, history: list = None, image_data: str = None) -> str:
         client = self._get_client()
         
         # Note: The new SDK manages chat slightly differently or implies using generate_content with history context
@@ -47,7 +48,7 @@ class GeminiService:
         if chat_history:
             print(f"--- [DEBUG] History: {len(chat_history)} messages ---")
 
-        print(f"--- [DEBUG] Prompt sent to Gemini ({settings.GEMINI_MODEL}) ---\n{prompt}\n------------------------------------------------")
+        print(f"--- [DEBUG] Prompt sent to Gemini ({settings.GEMINI_MODEL}) ---\n{prompt}\n")
         
         chat = client.chats.create(
             model=settings.GEMINI_MODEL,
@@ -57,20 +58,44 @@ class GeminiService:
             history=chat_history
         )
         
-        response = chat.send_message(prompt)
+        message_parts = [genai.types.Part(text=prompt)]
+        
+        if image_data:
+            import base64
+            print("--- [DEBUG] Attaching Image Context ---")
+            try:
+                # Remove header if present (e.g., "data:image/jpeg;base64,")
+                if "," in image_data:
+                    image_data = image_data.split(",")[1]
+                
+                image_bytes = base64.b64decode(image_data)
+                image_part = genai.types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
+                message_parts.append(image_part)
+            except Exception as e:
+                print(f"--- [ERROR] Failed to process image data: {e}")
+
+        print("------------------------------------------------")
+        
+        response = chat.send_message(message_parts)
         print(f"--- [DEBUG] Response from Gemini ---\n{response.text}\n----------------------------------")
         
         # Cleaning response to ensure just code
         code = response.text
         if not code:
             return ""
-            
-        if code.startswith("```python"):
-            code = code[9:]
-        if code.startswith("```"):
-            code = code[3:]
-        if code.endswith("```"):
-            code = code[:-3]
+
+        # Remove markdown code blocks if present using regex
+        # Look for ```python ... ``` or just ``` ... ```
+        pattern = r"```(?:python)?\s*(.*?)```"
+        match = re.search(pattern, code, re.DOTALL)
+        if match:
+             code = match.group(1)
+        else:
+             # If no blocks, maybe the whole thing is code, or we just strip lines?
+             # But if there is text and NO backticks, we might struggle.
+             # The existing logic just stripped backticks if they were at start/end.
+             # Let's trust regex first. If no match, we fallback to original raw text but maybe strip simplistic start/end.
+             pass
             
         return code.strip()
 
